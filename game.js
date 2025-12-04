@@ -15,8 +15,12 @@ const GameLogger = {
     // Logging enabled flag
     enabled: true,
     
+    // Counter for move events (for periodic logging)
+    moveEventCount: 0,
+    
     // Initialize a new session
     startSession(gameSettings) {
+        this.moveEventCount = 0;
         this.currentSession = {
             sessionId: Date.now(),
             startTime: new Date().toISOString(),
@@ -38,7 +42,7 @@ const GameLogger = {
             initialState: {
                 shooter: null,
                 targets: [],
-                surrounds: []
+                blockers: []
             },
             events: [],
             finalScore: 0
@@ -113,6 +117,8 @@ const GameLogger = {
     logInputMove(inputData) {
         if (!this.currentSession || !this.enabled) return;
         
+        this.moveEventCount++;
+        
         const event = {
             type: 'INPUT_MOVE',
             timestamp: Date.now() - this.currentSession.sessionId,
@@ -126,8 +132,8 @@ const GameLogger = {
         
         this.currentSession.events.push(event);
         
-        // Only log periodically to avoid spam
-        if (this.currentSession.events.filter(e => e.type === 'INPUT_MOVE').length % 10 === 1) {
+        // Only log periodically to avoid spam (every 10 move events)
+        if (this.moveEventCount % 10 === 1) {
             console.log('%c[GameLogger] Input Move', 'color: #FF9800');
             console.log('[GameLogger] Current: (' + inputData.currentX.toFixed(2) + ', ' + inputData.currentY.toFixed(2) + ')');
             console.log('[GameLogger] Delta: (' + inputData.dx.toFixed(2) + ', ' + inputData.dy.toFixed(2) + ')');
@@ -330,7 +336,13 @@ const GameLogger = {
         this.currentSession.finalScore = finalScore;
         
         // Store as last session for replay
-        this.lastSession = JSON.parse(JSON.stringify(this.currentSession));
+        // Use structuredClone if available (modern browsers), otherwise fall back to JSON
+        // This is safe because session data contains only serializable primitives and objects
+        if (typeof structuredClone === 'function') {
+            this.lastSession = structuredClone(this.currentSession);
+        } else {
+            this.lastSession = JSON.parse(JSON.stringify(this.currentSession));
+        }
         
         console.log('%c[GameLogger] Session Ended', 'color: #f44336; font-weight: bold');
         console.log('[GameLogger] Final Score:', finalScore);
