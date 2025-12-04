@@ -135,7 +135,7 @@ const themes = {
             behavior: 'guarded',
             count: 1,
             minCount: 1,
-            sizeRange: { min: 150, max: 150 },
+            sizeRange: { min: 180, max: 180 },
             fixedPosition: { x: 0.5, y: 0.25 } // Center-top of play area
         }
     }
