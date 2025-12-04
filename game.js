@@ -692,6 +692,10 @@ let currentInputType = 'mouse';
 let frameCounter = 0;
 const FRAME_LOG_INTERVAL = 30; // Log every 30 frames (about every 0.5s at 60fps)
 
+// Physics constants for force calculation
+const TENSION_WEIGHT = 0.7;  // Weight factor for tension (drag distance)
+const SPEED_WEIGHT = 0.3;    // Weight factor for speed (drag velocity)
+
 // Target behavior configurations - loaded from ThemeLoader or defaults
 let targetBehaviors = {};
 
@@ -1063,7 +1067,14 @@ function handleDragEnd() {
     const elapsed = (Date.now() - dragState.startTime) / 1000;
     const speed = distance / Math.max(elapsed, 0.1);
     const angle = Math.atan2(dy, dx);
-    const force = Math.min(speed / 100, 20);
+    
+    // Calculate force based on both tension (drag distance) and speed
+    // Tension factor: normalized drag distance (max ~200px for full tension)
+    const tensionFactor = Math.min(distance / 200, 1) * 20;
+    // Speed factor: normalized drag speed (max ~2000 pixels/sec for full speed)
+    const speedFactor = Math.min(speed / 2000, 1) * 20;
+    // Combined force using weight factors
+    const force = TENSION_WEIGHT * tensionFactor + SPEED_WEIGHT * speedFactor;
     const shotFired = distance > 20;
     
     // Log input end with calculated values
