@@ -1,6 +1,61 @@
 // Shooting Game - Main JavaScript
 
-// Theme definitions
+// Target behavior configurations (abstracted from theme visuals)
+const targetBehaviors = {
+    // Moving targets with uniform scoring (like ducks)
+    moving: {
+        moves: true,
+        speedRange: { min: 1, max: 3 },
+        respawns: true,
+        scoring: { type: 'uniform', basePoints: 10 }
+    },
+    // Stationary single target with zone scoring (like dartboard)
+    dartboard: {
+        moves: false,
+        speedRange: { min: 0, max: 0 },
+        respawns: false,
+        scoring: {
+            type: 'zones',
+            zones: [
+                { radiusPercent: 0.15, points: 50, name: 'bullseye' },
+                { radiusPercent: 0.35, points: 30, name: 'inner' },
+                { radiusPercent: 0.65, points: 20, name: 'middle' },
+                { radiusPercent: 1.0, points: 10, name: 'outer' }
+            ]
+        }
+    },
+    // Stationary target with blocker (like football goal with goalkeeper)
+    guarded: {
+        moves: false,
+        speedRange: { min: 0, max: 0 },
+        respawns: false,
+        hasBlocker: true,
+        blockerConfig: {
+            emoji: '🧤',
+            size: 50,
+            speed: 3,
+            movementRange: 0.4 // 40% of target width
+        },
+        scoring: { type: 'uniform', basePoints: 20 }
+    },
+    // Floating targets (like balloons)
+    floating: {
+        moves: true,
+        speedRange: { min: 0.5, max: 1.5 },
+        floatUp: true, // Balloons float upward
+        respawns: true,
+        scoring: { type: 'uniform', basePoints: 10 }
+    },
+    // Standard stationary target
+    stationary: {
+        moves: false,
+        speedRange: { min: 0, max: 0 },
+        respawns: true,
+        scoring: { type: 'uniform', basePoints: 10 }
+    }
+};
+
+// Theme definitions with configurable target properties
 const themes = {
     'shooting-range': {
         name: 'Shooting Range',
@@ -9,7 +64,14 @@ const themes = {
         projectile: '⚫',
         background: 'range',
         hitSound: 'hit',
-        missSound: 'miss'
+        missSound: 'miss',
+        // Target configuration
+        targetConfig: {
+            behavior: 'stationary',
+            count: 3,
+            minCount: 3,
+            sizeRange: { min: 40, max: 60 }
+        }
     },
     'duck-hunting': {
         name: 'Duck Hunting',
@@ -18,7 +80,14 @@ const themes = {
         projectile: '➡️',
         background: 'pond',
         hitSound: 'quack',
-        missSound: 'splash'
+        missSound: 'splash',
+        // Target configuration
+        targetConfig: {
+            behavior: 'moving',
+            count: 5,
+            minCount: 3,
+            sizeRange: { min: 35, max: 50 }
+        }
     },
     'balloon-shooting': {
         name: 'Balloon Shooting',
@@ -27,7 +96,14 @@ const themes = {
         projectile: '📍',
         background: 'sky',
         hitSound: 'pop',
-        missSound: 'whoosh'
+        missSound: 'whoosh',
+        // Target configuration
+        targetConfig: {
+            behavior: 'floating',
+            count: 6,
+            minCount: 4,
+            sizeRange: { min: 30, max: 45 }
+        }
     },
     'dart-throwing': {
         name: 'Dart Throwing',
@@ -36,7 +112,15 @@ const themes = {
         projectile: '🎯',
         background: 'pub',
         hitSound: 'thud',
-        missSound: 'clatter'
+        missSound: 'clatter',
+        // Target configuration - single large dartboard
+        targetConfig: {
+            behavior: 'dartboard',
+            count: 1,
+            minCount: 1,
+            sizeRange: { min: 120, max: 120 },
+            fixedPosition: { x: 0.5, y: 0.35 } // Center-top of play area
+        }
     },
     'football-shootout': {
         name: 'Football Shootout',
@@ -45,7 +129,15 @@ const themes = {
         projectile: '⚽',
         background: 'stadium',
         hitSound: 'goal',
-        missSound: 'crowd'
+        missSound: 'crowd',
+        // Target configuration - single goal with goalkeeper
+        targetConfig: {
+            behavior: 'guarded',
+            count: 1,
+            minCount: 1,
+            sizeRange: { min: 100, max: 100 },
+            fixedPosition: { x: 0.5, y: 0.25 } // Center-top of play area
+        }
     }
 };
 
@@ -57,6 +149,7 @@ let gameState = {
     currentTheme: null,
     targets: [],
     projectiles: [],
+    blockers: [],
     timerInterval: null
 };
 
@@ -114,12 +207,20 @@ function setupEventListeners() {
 
     // Custom play button
     document.getElementById('play-custom-btn').addEventListener('click', () => {
+        const targetCount = parseInt(document.getElementById('target-count-select').value);
+        const targetBehavior = document.getElementById('target-behavior-select').value;
         const customTheme = {
             name: 'Custom',
             shooter: document.getElementById('shooter-select').value,
             target: document.getElementById('target-select').value,
             projectile: document.getElementById('projectile-select').value,
-            background: document.getElementById('background-select').value
+            background: document.getElementById('background-select').value,
+            targetConfig: {
+                behavior: targetBehavior,
+                count: targetCount,
+                minCount: Math.min(targetCount, 3),
+                sizeRange: { min: 40, max: 60 }
+            }
         };
         startGame(customTheme);
     });
@@ -262,6 +363,7 @@ function startGame(theme) {
     gameState.isPlaying = true;
     gameState.targets = [];
     gameState.projectiles = [];
+    gameState.blockers = [];
     
     // Update UI
     shooterElement.textContent = theme.shooter;
@@ -285,8 +387,16 @@ function startGame(theme) {
         }
     }, 1000);
     
-    // Spawn initial targets
-    spawnTargets(3);
+    // Get target configuration
+    const targetConfig = theme.targetConfig || {
+        behavior: 'moving',
+        count: 3,
+        minCount: 3,
+        sizeRange: { min: 40, max: 60 }
+    };
+    
+    // Spawn initial targets based on configuration
+    spawnTargets(targetConfig.count);
     
     // Start game loop
     requestAnimationFrame(gameLoop);
@@ -322,27 +432,96 @@ function updateTime() {
 
 function spawnTargets(count) {
     for (let i = 0; i < count; i++) {
-        spawnTarget();
+        spawnTarget(i);
     }
 }
 
-function spawnTarget() {
+function spawnTarget(index = 0) {
     const padding = 60;
     const headerHeight = 60;
     const bottomPadding = 150;
+    const playWidth = canvas.width - padding * 2;
+    const playHeight = canvas.height - headerHeight - padding - bottomPadding;
+    
+    const theme = gameState.currentTheme;
+    const targetConfig = theme.targetConfig || {
+        behavior: 'moving',
+        count: 3,
+        minCount: 3,
+        sizeRange: { min: 40, max: 60 }
+    };
+    
+    const behavior = targetBehaviors[targetConfig.behavior] || targetBehaviors.moving;
+    const sizeRange = targetConfig.sizeRange;
+    
+    // Calculate position
+    let x, y;
+    if (targetConfig.fixedPosition) {
+        x = padding + targetConfig.fixedPosition.x * playWidth;
+        y = headerHeight + padding + targetConfig.fixedPosition.y * playHeight;
+    } else {
+        x = padding + Math.random() * playWidth;
+        y = headerHeight + padding + Math.random() * playHeight;
+    }
+    
+    // Calculate size
+    const size = sizeRange.min + Math.random() * (sizeRange.max - sizeRange.min);
+    
+    // Calculate velocity based on behavior
+    let vx = 0, vy = 0;
+    if (behavior.moves) {
+        const speed = behavior.speedRange.min + Math.random() * (behavior.speedRange.max - behavior.speedRange.min);
+        if (behavior.floatUp) {
+            // Balloons float upward with slight horizontal drift
+            vx = (Math.random() - 0.5) * speed;
+            vy = -speed; // Negative because canvas y increases downward
+        } else {
+            // Random direction
+            vx = (Math.random() - 0.5) * 2 * speed;
+            vy = (Math.random() - 0.5) * 2 * speed;
+        }
+    }
     
     const target = {
-        x: padding + Math.random() * (canvas.width - padding * 2),
-        y: headerHeight + padding + Math.random() * (canvas.height - headerHeight - padding - bottomPadding),
-        size: 40 + Math.random() * 20,
-        emoji: gameState.currentTheme.target,
-        vx: (Math.random() - 0.5) * 2,
-        vy: (Math.random() - 0.5) * 2,
+        x,
+        y,
+        size,
+        emoji: theme.target,
+        vx,
+        vy,
         active: true,
-        points: 10
+        behavior: targetConfig.behavior,
+        behaviorConfig: behavior,
+        scoring: behavior.scoring,
+        respawns: behavior.respawns,
+        hasBlocker: behavior.hasBlocker
     };
     
     gameState.targets.push(target);
+    
+    // Spawn blocker if this behavior has one and target doesn't have one yet
+    if (behavior.hasBlocker) {
+        const existingBlocker = gameState.blockers.find(b => b.parentTarget === target);
+        if (!existingBlocker) {
+            spawnBlocker(target, behavior.blockerConfig);
+        }
+    }
+}
+
+function spawnBlocker(target, blockerConfig) {
+    const blocker = {
+        x: target.x,
+        y: target.y + target.size * 0.5, // Position in front of target
+        size: blockerConfig.size,
+        emoji: blockerConfig.emoji,
+        speed: blockerConfig.speed,
+        direction: 1,
+        movementRange: blockerConfig.movementRange,
+        parentTarget: target,
+        active: true
+    };
+    
+    gameState.blockers.push(blocker);
 }
 
 function gameLoop() {
@@ -355,6 +534,10 @@ function gameLoop() {
     updateTargets();
     drawTargets();
     
+    // Update and draw blockers
+    updateBlockers();
+    drawBlockers();
+    
     // Update and draw projectiles
     updateProjectiles();
     drawProjectiles();
@@ -362,10 +545,15 @@ function gameLoop() {
     // Check collisions
     checkCollisions();
     
-    // Ensure minimum targets
-    const activeTargets = gameState.targets.filter(t => t.active).length;
-    if (activeTargets < 3) {
-        spawnTarget();
+    // Ensure minimum targets based on configuration
+    const targetConfig = gameState.currentTheme.targetConfig || { minCount: 3, behavior: 'moving' };
+    const behavior = targetBehaviors[targetConfig.behavior] || targetBehaviors.moving;
+    
+    if (behavior.respawns) {
+        const activeTargets = gameState.targets.filter(t => t.active).length;
+        if (activeTargets < targetConfig.minCount) {
+            spawnTarget();
+        }
     }
     
     // Continue loop
@@ -380,18 +568,65 @@ function updateTargets() {
     gameState.targets.forEach(target => {
         if (!target.active) return;
         
-        target.x += target.vx;
-        target.y += target.vy;
+        const behavior = target.behaviorConfig || targetBehaviors.moving;
         
-        // Bounce off walls
-        if (target.x < padding || target.x > canvas.width - padding) {
-            target.vx *= -1;
-            target.x = Math.max(padding, Math.min(canvas.width - padding, target.x));
+        // Only update position if target moves
+        if (behavior.moves) {
+            target.x += target.vx;
+            target.y += target.vy;
+            
+            // Handle floating targets (balloons) - respawn when they go off top
+            if (behavior.floatUp && target.y < -target.size) {
+                // Respawn at bottom
+                target.y = canvas.height + target.size;
+                target.x = padding + Math.random() * (canvas.width - padding * 2);
+            }
+            
+            // Bounce off walls (horizontal)
+            if (target.x < padding || target.x > canvas.width - padding) {
+                target.vx *= -1;
+                target.x = Math.max(padding, Math.min(canvas.width - padding, target.x));
+            }
+            
+            // Bounce off vertical walls (for non-floating targets)
+            if (!behavior.floatUp) {
+                if (target.y < headerHeight + padding || target.y > canvas.height - bottomPadding) {
+                    target.vy *= -1;
+                    target.y = Math.max(headerHeight + padding, Math.min(canvas.height - bottomPadding, target.y));
+                }
+            }
         }
-        if (target.y < headerHeight + padding || target.y > canvas.height - bottomPadding) {
-            target.vy *= -1;
-            target.y = Math.max(headerHeight + padding, Math.min(canvas.height - bottomPadding, target.y));
+    });
+}
+
+function updateBlockers() {
+    gameState.blockers.forEach(blocker => {
+        if (!blocker.active || !blocker.parentTarget.active) {
+            blocker.active = false;
+            return;
         }
+        
+        // Move blocker back and forth in front of target
+        const maxOffset = blocker.parentTarget.size * blocker.movementRange;
+        blocker.x += blocker.speed * blocker.direction;
+        
+        // Reverse direction at edges
+        const offset = blocker.x - blocker.parentTarget.x;
+        if (Math.abs(offset) > maxOffset) {
+            blocker.direction *= -1;
+            blocker.x = blocker.parentTarget.x + maxOffset * blocker.direction;
+        }
+    });
+}
+
+function drawBlockers() {
+    gameState.blockers.forEach(blocker => {
+        if (!blocker.active) return;
+        
+        ctx.font = `${blocker.size}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(blocker.emoji, blocker.x, blocker.y);
     });
 }
 
@@ -442,6 +677,24 @@ function checkCollisions() {
     gameState.projectiles.forEach(projectile => {
         if (!projectile.active) return;
         
+        // Check blocker collisions first (blockers block projectiles)
+        for (const blocker of gameState.blockers) {
+            if (!blocker.active) continue;
+            
+            const dx = projectile.x - blocker.x;
+            const dy = projectile.y - blocker.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const hitRadius = blocker.size / 2 + 10;
+            
+            if (distance < hitRadius) {
+                // Blocked!
+                projectile.active = false;
+                showBlockEffect(blocker.x, blocker.y);
+                return; // Don't check targets if blocked
+            }
+        }
+        
+        // Check target collisions
         gameState.targets.forEach(target => {
             if (!target.active) return;
             
@@ -451,31 +704,103 @@ function checkCollisions() {
             const hitRadius = target.size / 2 + 15;
             
             if (distance < hitRadius) {
-                // Hit!
-                target.active = false;
-                projectile.active = false;
-                gameState.score += target.points;
-                updateScore();
+                // Hit! Calculate points based on scoring type
+                const points = calculateScore(target, distance);
                 
-                // Visual feedback
-                showHitEffect(target.x, target.y);
+                if (points > 0) {
+                    // For non-respawning targets (dartboard, goal), don't deactivate
+                    // just award points. For respawning targets, deactivate them.
+                    if (target.respawns === false) {
+                        // Keep target active but award points
+                    } else {
+                        target.active = false;
+                    }
+                    
+                    projectile.active = false;
+                    gameState.score += points;
+                    updateScore();
+                    
+                    // Visual feedback
+                    showHitEffect(target.x, target.y, points);
+                }
             }
         });
     });
     
-    // Clean up inactive targets
-    gameState.targets = gameState.targets.filter(t => t.active);
+    // Clean up inactive targets (only those that should respawn)
+    gameState.targets = gameState.targets.filter(t => t.active || t.respawns === false);
+    
+    // Clean up inactive blockers
+    gameState.blockers = gameState.blockers.filter(b => b.active);
 }
 
-function showHitEffect(x, y) {
+function calculateScore(target, distance) {
+    const scoring = target.scoring || { type: 'uniform', basePoints: 10 };
+    
+    if (scoring.type === 'uniform') {
+        return scoring.basePoints;
+    }
+    
+    if (scoring.type === 'zones') {
+        // Zone-based scoring (like dartboard)
+        // Use hit radius for consistent detection
+        const hitRadius = target.size / 2 + 15;
+        const hitPercent = Math.min(distance / hitRadius, 1.0);
+        
+        for (const zone of scoring.zones) {
+            if (hitPercent <= zone.radiusPercent) {
+                return zone.points;
+            }
+        }
+        // Default outer zone
+        return scoring.zones[scoring.zones.length - 1].points;
+    }
+    
+    return 10; // Default points
+}
+
+function showHitEffect(x, y, points = 10) {
     // Create a temporary hit effect
     const effect = document.createElement('div');
-    effect.textContent = '+10';
+    effect.textContent = `+${points}`;
     effect.style.position = 'absolute';
     effect.style.left = `${x}px`;
     effect.style.top = `${y}px`;
-    effect.style.color = '#FFD700';
-    effect.style.fontSize = '24px';
+    
+    // Different colors for different point values
+    if (points >= 50) {
+        effect.style.color = '#FFD700'; // Gold for bullseye
+        effect.style.fontSize = '32px';
+    } else if (points >= 30) {
+        effect.style.color = '#FFA500'; // Orange for high score
+        effect.style.fontSize = '28px';
+    } else if (points >= 20) {
+        effect.style.color = '#90EE90'; // Light green for medium
+        effect.style.fontSize = '26px';
+    } else {
+        effect.style.color = '#FFFFFF'; // White for basic
+        effect.style.fontSize = '24px';
+    }
+    
+    effect.style.fontWeight = 'bold';
+    effect.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
+    effect.style.pointerEvents = 'none';
+    effect.style.zIndex = '150';
+    effect.style.animation = 'fadeUp 0.5s ease-out forwards';
+    
+    gameScreen.appendChild(effect);
+    
+    setTimeout(() => effect.remove(), 500);
+}
+
+function showBlockEffect(x, y) {
+    const effect = document.createElement('div');
+    effect.textContent = '🛑 BLOCKED!';
+    effect.style.position = 'absolute';
+    effect.style.left = `${x}px`;
+    effect.style.top = `${y}px`;
+    effect.style.color = '#FF4444';
+    effect.style.fontSize = '20px';
     effect.style.fontWeight = 'bold';
     effect.style.textShadow = '2px 2px 4px rgba(0,0,0,0.5)';
     effect.style.pointerEvents = 'none';
