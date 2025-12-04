@@ -1,0 +1,20 @@
+{
+    "name": "Space Invaders",
+    "shooter": "🚀",
+    "target": "👾",
+    "projectile": "⚡",
+    "background": "space",
+    "hitSound": "explosion",
+    "missSound": "laser",
+    "targetConfig": {
+        "behavior": "moving",
+        "count": 6,
+        "minCount": 4,
+        "sizeRange": { "min": 35, "max": 50 }
+    },
+    "customBackground": {
+        "name": "Space",
+        "cssClass": "bg-space",
+        "css": "background: linear-gradient(to bottom, #0d0d2b 0%, #1a1a4a 50%, #0d0d2b 100%);"
+    }
+}

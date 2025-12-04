@@ -1,0 +1,48 @@
+{
+    "moving": {
+        "moves": true,
+        "speedRange": { "min": 1, "max": 3 },
+        "respawns": true,
+        "scoring": { "type": "uniform", "basePoints": 10 }
+    },
+    "dartboard": {
+        "moves": false,
+        "speedRange": { "min": 0, "max": 0 },
+        "respawns": false,
+        "scoring": {
+            "type": "zones",
+            "zones": [
+                { "radiusPercent": 0.15, "points": 50, "name": "bullseye" },
+                { "radiusPercent": 0.35, "points": 30, "name": "inner" },
+                { "radiusPercent": 0.65, "points": 20, "name": "middle" },
+                { "radiusPercent": 1.0, "points": 10, "name": "outer" }
+            ]
+        }
+    },
+    "guarded": {
+        "moves": false,
+        "speedRange": { "min": 0, "max": 0 },
+        "respawns": false,
+        "hasBlocker": true,
+        "blockerConfig": {
+            "emoji": "🧤",
+            "size": 50,
+            "speed": 3,
+            "movementRange": 0.4
+        },
+        "scoring": { "type": "uniform", "basePoints": 20 }
+    },
+    "floating": {
+        "moves": true,
+        "speedRange": { "min": 0.5, "max": 1.5 },
+        "floatUp": true,
+        "respawns": true,
+        "scoring": { "type": "uniform", "basePoints": 10 }
+    },
+    "stationary": {
+        "moves": false,
+        "speedRange": { "min": 0, "max": 0 },
+        "respawns": true,
+        "scoring": { "type": "uniform", "basePoints": 10 }
+    }
+}

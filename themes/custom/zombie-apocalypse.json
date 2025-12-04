@@ -1,0 +1,20 @@
+{
+    "name": "Zombie Apocalypse",
+    "shooter": "🔫",
+    "target": "🧟",
+    "projectile": "💥",
+    "background": "graveyard",
+    "hitSound": "splat",
+    "missSound": "moan",
+    "targetConfig": {
+        "behavior": "moving",
+        "count": 5,
+        "minCount": 3,
+        "sizeRange": { "min": 40, "max": 55 }
+    },
+    "customBackground": {
+        "name": "Graveyard",
+        "cssClass": "bg-graveyard",
+        "css": "background: linear-gradient(to bottom, #2c2c54 0%, #474787 30%, #2c2c54 60%, #1e1e3f 100%);"
+    }
+}

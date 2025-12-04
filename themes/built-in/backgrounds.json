@@ -1,0 +1,22 @@
+{
+    "range": {
+        "name": "Shooting Range",
+        "cssClass": "bg-range"
+    },
+    "pond": {
+        "name": "Pond",
+        "cssClass": "bg-pond"
+    },
+    "sky": {
+        "name": "Sky",
+        "cssClass": "bg-sky"
+    },
+    "pub": {
+        "name": "Pub",
+        "cssClass": "bg-pub"
+    },
+    "stadium": {
+        "name": "Stadium",
+        "cssClass": "bg-stadium"
+    }
+}
