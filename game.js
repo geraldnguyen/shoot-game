@@ -1,5 +1,697 @@
 // Shooting Game - Main JavaScript
 
+// ========================================
+// Game State Logger and Replay System
+// ========================================
+
+// Game Logger class for detailed state logging and replay
+const GameLogger = {
+    // Current session log
+    currentSession: null,
+    
+    // Last completed session for replay
+    lastSession: null,
+    
+    // Logging enabled flag
+    enabled: true,
+    
+    // Counter for move events (for periodic logging)
+    moveEventCount: 0,
+    
+    // Initialize a new session
+    startSession(gameSettings) {
+        this.moveEventCount = 0;
+        this.currentSession = {
+            sessionId: Date.now(),
+            startTime: new Date().toISOString(),
+            endTime: null,
+            gameSettings: {
+                canvasWidth: gameSettings.canvasWidth,
+                canvasHeight: gameSettings.canvasHeight,
+                inputType: gameSettings.inputType,
+                theme: {
+                    name: gameSettings.theme.name,
+                    shooter: gameSettings.theme.shooter,
+                    target: gameSettings.theme.target,
+                    projectile: gameSettings.theme.projectile,
+                    background: gameSettings.theme.background,
+                    targetConfig: gameSettings.theme.targetConfig
+                },
+                gameDuration: gameSettings.gameDuration
+            },
+            initialState: {
+                shooter: null,
+                targets: [],
+                blockers: []
+            },
+            events: [],
+            finalScore: 0
+        };
+        
+        console.log('%c[GameLogger] New session started', 'color: #4CAF50; font-weight: bold');
+        console.log('[GameLogger] Session ID:', this.currentSession.sessionId);
+        console.log('[GameLogger] Game Settings:', this.currentSession.gameSettings);
+        
+        return this.currentSession;
+    },
+    
+    // Log initial game state
+    logInitialState(shooter, targets, blockers) {
+        if (!this.currentSession || !this.enabled) return;
+        
+        this.currentSession.initialState = {
+            shooter: {
+                emoji: shooter.emoji,
+                x: shooter.x,
+                y: shooter.y
+            },
+            targets: targets.map(t => ({
+                x: t.x,
+                y: t.y,
+                size: t.size,
+                emoji: t.emoji,
+                vx: t.vx,
+                vy: t.vy,
+                behavior: t.behavior,
+                scoring: t.scoring
+            })),
+            blockers: blockers.map(b => ({
+                x: b.x,
+                y: b.y,
+                size: b.size,
+                emoji: b.emoji,
+                speed: b.speed,
+                direction: b.direction
+            }))
+        };
+        
+        console.log('%c[GameLogger] Initial State Logged', 'color: #2196F3; font-weight: bold');
+        console.log('[GameLogger] Shooter:', this.currentSession.initialState.shooter);
+        console.log('[GameLogger] Targets (' + targets.length + '):', this.currentSession.initialState.targets);
+        console.log('[GameLogger] Blockers (' + blockers.length + '):', this.currentSession.initialState.blockers);
+    },
+    
+    // Log touch/click start event
+    logInputStart(inputData) {
+        if (!this.currentSession || !this.enabled) return;
+        
+        const event = {
+            type: 'INPUT_START',
+            timestamp: Date.now() - this.currentSession.sessionId,
+            data: {
+                inputType: inputData.inputType,
+                startX: inputData.startX,
+                startY: inputData.startY,
+                startTime: inputData.startTime
+            }
+        };
+        
+        this.currentSession.events.push(event);
+        
+        console.log('%c[GameLogger] Input Start', 'color: #FF9800');
+        console.log('[GameLogger] Type:', inputData.inputType);
+        console.log('[GameLogger] Start Position: (' + inputData.startX.toFixed(2) + ', ' + inputData.startY.toFixed(2) + ')');
+    },
+    
+    // Log touch/click movement event
+    logInputMove(inputData) {
+        if (!this.currentSession || !this.enabled) return;
+        
+        this.moveEventCount++;
+        
+        const event = {
+            type: 'INPUT_MOVE',
+            timestamp: Date.now() - this.currentSession.sessionId,
+            data: {
+                currentX: inputData.currentX,
+                currentY: inputData.currentY,
+                dx: inputData.dx,
+                dy: inputData.dy
+            }
+        };
+        
+        this.currentSession.events.push(event);
+        
+        // Only log periodically to avoid spam (every 10 move events)
+        if (this.moveEventCount % 10 === 1) {
+            console.log('%c[GameLogger] Input Move', 'color: #FF9800');
+            console.log('[GameLogger] Current: (' + inputData.currentX.toFixed(2) + ', ' + inputData.currentY.toFixed(2) + ')');
+            console.log('[GameLogger] Delta: (' + inputData.dx.toFixed(2) + ', ' + inputData.dy.toFixed(2) + ')');
+        }
+    },
+    
+    // Log touch/click release event
+    logInputEnd(inputData) {
+        if (!this.currentSession || !this.enabled) return;
+        
+        const event = {
+            type: 'INPUT_END',
+            timestamp: Date.now() - this.currentSession.sessionId,
+            data: {
+                startX: inputData.startX,
+                startY: inputData.startY,
+                releaseX: inputData.releaseX,
+                releaseY: inputData.releaseY,
+                dx: inputData.dx,
+                dy: inputData.dy,
+                distance: inputData.distance,
+                elapsed: inputData.elapsed,
+                speed: inputData.speed,
+                angle: inputData.angle,
+                force: inputData.force,
+                shotFired: inputData.shotFired
+            }
+        };
+        
+        this.currentSession.events.push(event);
+        
+        console.log('%c[GameLogger] Input End', 'color: #FF9800; font-weight: bold');
+        console.log('[GameLogger] Start: (' + inputData.startX.toFixed(2) + ', ' + inputData.startY.toFixed(2) + ')');
+        console.log('[GameLogger] Release: (' + inputData.releaseX.toFixed(2) + ', ' + inputData.releaseY.toFixed(2) + ')');
+        console.log('[GameLogger] Movement: dx=' + inputData.dx.toFixed(2) + ', dy=' + inputData.dy.toFixed(2) + ', distance=' + inputData.distance.toFixed(2));
+        console.log('[GameLogger] Speed:', inputData.speed.toFixed(2), 'pixels/sec');
+        console.log('[GameLogger] Angle:', (inputData.angle * 180 / Math.PI).toFixed(2), 'degrees');
+        console.log('[GameLogger] Force:', inputData.force.toFixed(2));
+        console.log('[GameLogger] Shot Fired:', inputData.shotFired);
+    },
+    
+    // Log projectile creation
+    logProjectileStart(projectile, index) {
+        if (!this.currentSession || !this.enabled) return;
+        
+        const event = {
+            type: 'PROJECTILE_START',
+            timestamp: Date.now() - this.currentSession.sessionId,
+            data: {
+                projectileId: index,
+                startX: projectile.x,
+                startY: projectile.y,
+                vx: projectile.vx,
+                vy: projectile.vy,
+                emoji: projectile.emoji
+            }
+        };
+        
+        this.currentSession.events.push(event);
+        
+        console.log('%c[GameLogger] Projectile Start', 'color: #E91E63; font-weight: bold');
+        console.log('[GameLogger] ID:', index);
+        console.log('[GameLogger] Start Position: (' + projectile.x.toFixed(2) + ', ' + projectile.y.toFixed(2) + ')');
+        console.log('[GameLogger] Velocity: vx=' + projectile.vx.toFixed(2) + ', vy=' + projectile.vy.toFixed(2));
+    },
+    
+    // Log projectile hit
+    logProjectileHit(projectile, target, points, distance) {
+        if (!this.currentSession || !this.enabled) return;
+        
+        const event = {
+            type: 'PROJECTILE_HIT',
+            timestamp: Date.now() - this.currentSession.sessionId,
+            data: {
+                projectilePosition: { x: projectile.x, y: projectile.y },
+                targetPosition: { x: target.x, y: target.y },
+                targetEmoji: target.emoji,
+                distance: distance,
+                points: points,
+                currentScore: gameState.score + points
+            }
+        };
+        
+        this.currentSession.events.push(event);
+        
+        console.log('%c[GameLogger] HIT!', 'color: #4CAF50; font-weight: bold; font-size: 14px');
+        console.log('[GameLogger] Projectile Final Position: (' + projectile.x.toFixed(2) + ', ' + projectile.y.toFixed(2) + ')');
+        console.log('[GameLogger] Target Position: (' + target.x.toFixed(2) + ', ' + target.y.toFixed(2) + ')');
+        console.log('[GameLogger] Distance:', distance.toFixed(2));
+        console.log('[GameLogger] Points:', points);
+        console.log('[GameLogger] New Score:', gameState.score + points);
+    },
+    
+    // Log projectile miss (went out of bounds)
+    logProjectileMiss(projectile, reason) {
+        if (!this.currentSession || !this.enabled) return;
+        
+        const event = {
+            type: 'PROJECTILE_MISS',
+            timestamp: Date.now() - this.currentSession.sessionId,
+            data: {
+                finalPosition: { x: projectile.x, y: projectile.y },
+                reason: reason
+            }
+        };
+        
+        this.currentSession.events.push(event);
+        
+        console.log('%c[GameLogger] MISS', 'color: #f44336; font-weight: bold');
+        console.log('[GameLogger] Final Position: (' + projectile.x.toFixed(2) + ', ' + projectile.y.toFixed(2) + ')');
+        console.log('[GameLogger] Reason:', reason);
+    },
+    
+    // Log projectile blocked
+    logProjectileBlocked(projectile, blocker) {
+        if (!this.currentSession || !this.enabled) return;
+        
+        const event = {
+            type: 'PROJECTILE_BLOCKED',
+            timestamp: Date.now() - this.currentSession.sessionId,
+            data: {
+                projectilePosition: { x: projectile.x, y: projectile.y },
+                blockerPosition: { x: blocker.x, y: blocker.y },
+                blockerEmoji: blocker.emoji
+            }
+        };
+        
+        this.currentSession.events.push(event);
+        
+        console.log('%c[GameLogger] BLOCKED!', 'color: #ff5722; font-weight: bold');
+        console.log('[GameLogger] Projectile Position: (' + projectile.x.toFixed(2) + ', ' + projectile.y.toFixed(2) + ')');
+        console.log('[GameLogger] Blocker Position: (' + blocker.x.toFixed(2) + ', ' + blocker.y.toFixed(2) + ')');
+    },
+    
+    // Log target spawn
+    logTargetSpawn(target, index) {
+        if (!this.currentSession || !this.enabled) return;
+        
+        const event = {
+            type: 'TARGET_SPAWN',
+            timestamp: Date.now() - this.currentSession.sessionId,
+            data: {
+                targetId: index,
+                x: target.x,
+                y: target.y,
+                size: target.size,
+                emoji: target.emoji,
+                vx: target.vx,
+                vy: target.vy,
+                behavior: target.behavior
+            }
+        };
+        
+        this.currentSession.events.push(event);
+        
+        console.log('%c[GameLogger] Target Spawned', 'color: #9C27B0');
+        console.log('[GameLogger] Position: (' + target.x.toFixed(2) + ', ' + target.y.toFixed(2) + ')');
+        console.log('[GameLogger] Size:', target.size);
+        console.log('[GameLogger] Velocity: vx=' + target.vx.toFixed(2) + ', vy=' + target.vy.toFixed(2));
+    },
+    
+    // Log game frame (for replay - sampled every N frames)
+    logGameFrame(frameData) {
+        if (!this.currentSession || !this.enabled) return;
+        
+        const event = {
+            type: 'GAME_FRAME',
+            timestamp: Date.now() - this.currentSession.sessionId,
+            data: {
+                targets: frameData.targets.map(t => ({
+                    x: t.x,
+                    y: t.y,
+                    active: t.active
+                })),
+                projectiles: frameData.projectiles.map(p => ({
+                    x: p.x,
+                    y: p.y,
+                    vx: p.vx,
+                    vy: p.vy,
+                    active: p.active
+                })),
+                blockers: frameData.blockers.map(b => ({
+                    x: b.x,
+                    y: b.y,
+                    active: b.active
+                })),
+                score: frameData.score,
+                timeLeft: frameData.timeLeft
+            }
+        };
+        
+        this.currentSession.events.push(event);
+    },
+    
+    // End the session
+    endSession(finalScore) {
+        if (!this.currentSession) return;
+        
+        this.currentSession.endTime = new Date().toISOString();
+        this.currentSession.finalScore = finalScore;
+        
+        // Store as last session for replay
+        // Use structuredClone if available (modern browsers), otherwise fall back to JSON
+        // This is safe because session data contains only serializable primitives and objects
+        if (typeof structuredClone === 'function') {
+            this.lastSession = structuredClone(this.currentSession);
+        } else {
+            this.lastSession = JSON.parse(JSON.stringify(this.currentSession));
+        }
+        
+        console.log('%c[GameLogger] Session Ended', 'color: #f44336; font-weight: bold');
+        console.log('[GameLogger] Final Score:', finalScore);
+        console.log('[GameLogger] Total Events:', this.currentSession.events.length);
+        console.log('[GameLogger] Session Duration:', 
+            (new Date(this.currentSession.endTime) - new Date(this.currentSession.startTime)) / 1000, 'seconds');
+        console.log('[GameLogger] Full Session Log:', this.currentSession);
+        
+        // Store in localStorage for persistence
+        try {
+            localStorage.setItem('shootGame_lastSession', JSON.stringify(this.lastSession));
+        } catch (e) {
+            console.warn('[GameLogger] Could not save to localStorage:', e);
+        }
+        
+        return this.lastSession;
+    },
+    
+    // Get last session for replay
+    getLastSession() {
+        if (this.lastSession) return this.lastSession;
+        
+        // Try to load from localStorage
+        try {
+            const stored = localStorage.getItem('shootGame_lastSession');
+            if (stored) {
+                this.lastSession = JSON.parse(stored);
+                return this.lastSession;
+            }
+        } catch (e) {
+            console.warn('[GameLogger] Could not load from localStorage:', e);
+        }
+        
+        return null;
+    },
+    
+    // Check if replay is available
+    hasReplayData() {
+        return this.getLastSession() !== null;
+    },
+    
+    // Log summary to console
+    logSummary() {
+        const session = this.getLastSession();
+        if (!session) {
+            console.log('[GameLogger] No session data available');
+            return;
+        }
+        
+        console.log('%c========================================', 'color: #2196F3');
+        console.log('%c[GameLogger] SESSION SUMMARY', 'color: #2196F3; font-weight: bold; font-size: 16px');
+        console.log('%c========================================', 'color: #2196F3');
+        
+        console.log('\n%c--- Game Settings ---', 'font-weight: bold');
+        console.log('Canvas:', session.gameSettings.canvasWidth + 'x' + session.gameSettings.canvasHeight);
+        console.log('Input Type:', session.gameSettings.inputType);
+        console.log('Theme:', session.gameSettings.theme.name);
+        console.log('Game Duration:', session.gameSettings.gameDuration + 's');
+        
+        console.log('\n%c--- Initial State ---', 'font-weight: bold');
+        console.log('Shooter:', session.initialState.shooter);
+        console.log('Targets:', session.initialState.targets.length);
+        console.log('Blockers:', session.initialState.blockers.length);
+        
+        const shots = session.events.filter(e => e.type === 'PROJECTILE_START').length;
+        const hits = session.events.filter(e => e.type === 'PROJECTILE_HIT').length;
+        const misses = session.events.filter(e => e.type === 'PROJECTILE_MISS').length;
+        const blocked = session.events.filter(e => e.type === 'PROJECTILE_BLOCKED').length;
+        
+        console.log('\n%c--- Statistics ---', 'font-weight: bold');
+        console.log('Total Shots:', shots);
+        console.log('Hits:', hits, '(' + (shots > 0 ? (hits / shots * 100).toFixed(1) : 0) + '%)');
+        console.log('Misses:', misses);
+        console.log('Blocked:', blocked);
+        console.log('Final Score:', session.finalScore);
+        
+        console.log('%c========================================', 'color: #2196F3');
+    }
+};
+
+// ========================================
+// Replay System
+// ========================================
+
+const ReplaySystem = {
+    isReplaying: false,
+    replaySession: null,
+    replayEventIndex: 0,
+    replayStartTime: 0,
+    replayFrameId: null,
+    replaySpeed: 1,
+    
+    // Start replay
+    startReplay() {
+        const session = GameLogger.getLastSession();
+        if (!session) {
+            console.log('[ReplaySystem] No replay data available');
+            return false;
+        }
+        
+        console.log('%c[ReplaySystem] Starting Replay', 'color: #9C27B0; font-weight: bold');
+        console.log('[ReplaySystem] Session ID:', session.sessionId);
+        
+        this.isReplaying = true;
+        this.replaySession = session;
+        this.replayEventIndex = 0;
+        this.replayStartTime = Date.now();
+        
+        // Initialize replay game state
+        this.initReplayState();
+        
+        // Start replay loop
+        this.replayLoop();
+        
+        return true;
+    },
+    
+    // Initialize replay state
+    initReplayState() {
+        const session = this.replaySession;
+        
+        // Reset game state for replay
+        gameState.score = 0;
+        gameState.timeLeft = session.gameSettings.gameDuration;
+        gameState.isPlaying = true;
+        gameState.targets = [];
+        gameState.projectiles = [];
+        gameState.blockers = [];
+        gameState.currentTheme = session.gameSettings.theme;
+        
+        // Set up shooter
+        shooterElement.textContent = session.gameSettings.theme.shooter;
+        
+        // Set background
+        gameScreen.className = `bg-${session.gameSettings.theme.background}`;
+        
+        // Restore initial targets
+        session.initialState.targets.forEach(t => {
+            gameState.targets.push({
+                x: t.x,
+                y: t.y,
+                size: t.size,
+                emoji: t.emoji,
+                vx: t.vx,
+                vy: t.vy,
+                active: true,
+                behavior: t.behavior,
+                behaviorConfig: targetBehaviors[t.behavior] || targetBehaviors.moving,
+                scoring: t.scoring,
+                respawns: t.scoring ? t.scoring.type !== 'zones' : true
+            });
+        });
+        
+        // Restore initial blockers
+        session.initialState.blockers.forEach(b => {
+            gameState.blockers.push({
+                x: b.x,
+                y: b.y,
+                size: b.size,
+                emoji: b.emoji,
+                speed: b.speed,
+                direction: b.direction,
+                active: true
+            });
+        });
+        
+        // Show game screen
+        menuScreen.classList.add('hidden');
+        gameOverScreen.classList.add('hidden');
+        gameScreen.classList.remove('hidden');
+        
+        updateScore();
+        updateTime();
+        
+        // Show replay indicator
+        this.showReplayIndicator();
+    },
+    
+    // Show replay indicator
+    showReplayIndicator() {
+        let indicator = document.getElementById('replay-indicator');
+        if (!indicator) {
+            indicator = document.createElement('div');
+            indicator.id = 'replay-indicator';
+            indicator.style.cssText = `
+                position: fixed;
+                top: 70px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(156, 39, 176, 0.9);
+                color: white;
+                padding: 10px 20px;
+                border-radius: 20px;
+                font-size: 1rem;
+                font-weight: bold;
+                z-index: 300;
+                animation: pulse 1s infinite;
+            `;
+            
+            // Add pulse animation if not exists
+            if (!document.getElementById('replay-animation-style')) {
+                const style = document.createElement('style');
+                style.id = 'replay-animation-style';
+                style.textContent = `
+                    @keyframes pulse {
+                        0%, 100% { opacity: 1; }
+                        50% { opacity: 0.7; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            gameScreen.appendChild(indicator);
+        }
+        indicator.textContent = '▶️ REPLAY';
+        indicator.style.display = 'block';
+    },
+    
+    // Hide replay indicator
+    hideReplayIndicator() {
+        const indicator = document.getElementById('replay-indicator');
+        if (indicator) {
+            indicator.style.display = 'none';
+        }
+    },
+    
+    // Replay loop
+    replayLoop() {
+        if (!this.isReplaying) return;
+        
+        const currentTime = (Date.now() - this.replayStartTime) * this.replaySpeed;
+        
+        // Process events up to current time
+        while (this.replayEventIndex < this.replaySession.events.length) {
+            const event = this.replaySession.events[this.replayEventIndex];
+            
+            if (event.timestamp > currentTime) break;
+            
+            this.processReplayEvent(event);
+            this.replayEventIndex++;
+        }
+        
+        // Update game state
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        updateTargets();
+        drawTargets();
+        updateBlockers();
+        drawBlockers();
+        updateProjectiles();
+        drawProjectiles();
+        
+        // Check if replay is complete
+        if (this.replayEventIndex >= this.replaySession.events.length) {
+            // Wait a moment then end replay
+            setTimeout(() => this.endReplay(), 1000);
+            return;
+        }
+        
+        this.replayFrameId = requestAnimationFrame(() => this.replayLoop());
+    },
+    
+    // Process a replay event
+    processReplayEvent(event) {
+        switch (event.type) {
+            case 'PROJECTILE_START':
+                gameState.projectiles.push({
+                    x: event.data.startX,
+                    y: event.data.startY,
+                    vx: event.data.vx,
+                    vy: event.data.vy,
+                    emoji: event.data.emoji,
+                    active: true
+                });
+                break;
+                
+            case 'PROJECTILE_HIT':
+                gameState.score = event.data.currentScore;
+                updateScore();
+                showHitEffect(event.data.targetPosition.x, event.data.targetPosition.y, event.data.points);
+                break;
+                
+            case 'PROJECTILE_BLOCKED':
+                showBlockEffect(event.data.blockerPosition.x, event.data.blockerPosition.y);
+                break;
+                
+            case 'TARGET_SPAWN':
+                gameState.targets.push({
+                    x: event.data.x,
+                    y: event.data.y,
+                    size: event.data.size,
+                    emoji: event.data.emoji,
+                    vx: event.data.vx,
+                    vy: event.data.vy,
+                    active: true,
+                    behavior: event.data.behavior,
+                    behaviorConfig: targetBehaviors[event.data.behavior] || targetBehaviors.moving,
+                    respawns: true
+                });
+                break;
+                
+            case 'GAME_FRAME':
+                gameState.timeLeft = event.data.timeLeft;
+                updateTime();
+                break;
+        }
+    },
+    
+    // End replay
+    endReplay() {
+        this.isReplaying = false;
+        
+        if (this.replayFrameId) {
+            cancelAnimationFrame(this.replayFrameId);
+            this.replayFrameId = null;
+        }
+        
+        this.hideReplayIndicator();
+        
+        // Show final score
+        gameState.score = this.replaySession.finalScore;
+        finalScoreDisplay.textContent = gameState.score;
+        gameOverScreen.classList.remove('hidden');
+        
+        console.log('%c[ReplaySystem] Replay Complete', 'color: #9C27B0; font-weight: bold');
+    },
+    
+    // Stop replay
+    stopReplay() {
+        if (!this.isReplaying) return;
+        
+        this.isReplaying = false;
+        
+        if (this.replayFrameId) {
+            cancelAnimationFrame(this.replayFrameId);
+            this.replayFrameId = null;
+        }
+        
+        this.hideReplayIndicator();
+        gameState.isPlaying = false;
+    }
+};
+
+// Track input type for logging
+let currentInputType = 'mouse';
+
+// Frame counter for logging
+let frameCounter = 0;
+const FRAME_LOG_INTERVAL = 30; // Log every 30 frames (about every 0.5s at 60fps)
+
 // Target behavior configurations (abstracted from theme visuals)
 const targetBehaviors = {
     // Moving targets with uniform scoring (like ducks)
@@ -241,6 +933,9 @@ function setupEventListeners() {
         gameOverScreen.classList.add('hidden');
         showMenu();
     });
+    
+    // Replay button
+    document.getElementById('replay-btn').addEventListener('click', handleReplayClick);
 
     // Touch/Mouse events for shooting
     setupShootingControls();
@@ -262,6 +957,7 @@ function setupShootingControls() {
 
 function handleTouchStart(e) {
     e.preventDefault();
+    currentInputType = 'touch';
     const touch = e.touches[0];
     handleDragStart({ clientX: touch.clientX, clientY: touch.clientY });
 }
@@ -278,7 +974,12 @@ function handleTouchEnd(e) {
 }
 
 function handleDragStart(e) {
-    if (!gameState.isPlaying) return;
+    if (!gameState.isPlaying || ReplaySystem.isReplaying) return;
+    
+    // Track input type for logging
+    if (currentInputType !== 'touch') {
+        currentInputType = 'mouse';
+    }
     
     dragState.isDragging = true;
     dragState.startX = e.clientX;
@@ -287,6 +988,14 @@ function handleDragStart(e) {
     dragState.currentY = e.clientY;
     dragState.startTime = Date.now();
     
+    // Log input start
+    GameLogger.logInputStart({
+        inputType: currentInputType,
+        startX: dragState.startX,
+        startY: dragState.startY,
+        startTime: dragState.startTime
+    });
+    
     updateAimLine();
     aimLine.classList.remove('hidden');
 }
@@ -294,8 +1003,19 @@ function handleDragStart(e) {
 function handleDragMove(e) {
     if (!dragState.isDragging) return;
     
+    const prevX = dragState.currentX;
+    const prevY = dragState.currentY;
+    
     dragState.currentX = e.clientX;
     dragState.currentY = e.clientY;
+    
+    // Log input movement
+    GameLogger.logInputMove({
+        currentX: dragState.currentX,
+        currentY: dragState.currentY,
+        dx: dragState.currentX - prevX,
+        dy: dragState.currentY - prevY
+    });
     
     updateAimLine();
     updateShooterRotation();
@@ -316,13 +1036,28 @@ function handleDragEnd() {
     const distance = Math.sqrt(dx * dx + dy * dy);
     const elapsed = (Date.now() - dragState.startTime) / 1000;
     const speed = distance / Math.max(elapsed, 0.1);
+    const angle = Math.atan2(dy, dx);
+    const force = Math.min(speed / 100, 20);
+    const shotFired = distance > 20;
+    
+    // Log input end with calculated values
+    GameLogger.logInputEnd({
+        startX: dragState.startX,
+        startY: dragState.startY,
+        releaseX: dragState.currentX,
+        releaseY: dragState.currentY,
+        dx: dx,
+        dy: dy,
+        distance: distance,
+        elapsed: elapsed,
+        speed: speed,
+        angle: angle,
+        force: force,
+        shotFired: shotFired
+    });
     
     // Minimum drag distance to shoot
-    if (distance > 20) {
-        // Normalize and apply force based on speed
-        const force = Math.min(speed / 100, 20);
-        const angle = Math.atan2(dy, dx);
-        
+    if (shotFired) {
         shootProjectile(angle, force);
     }
 }
@@ -377,9 +1112,17 @@ function shootProjectile(angle, force) {
     };
     
     gameState.projectiles.push(projectile);
+    
+    // Log projectile start
+    GameLogger.logProjectileStart(projectile, gameState.projectiles.length - 1);
 }
 
 function startGame(theme) {
+    // Stop any ongoing replay
+    if (ReplaySystem.isReplaying) {
+        ReplaySystem.stopReplay();
+    }
+    
     gameState.currentTheme = theme;
     gameState.score = 0;
     gameState.timeLeft = 30;
@@ -387,6 +1130,18 @@ function startGame(theme) {
     gameState.targets = [];
     gameState.projectiles = [];
     gameState.blockers = [];
+    
+    // Reset frame counter
+    frameCounter = 0;
+    
+    // Start game logging session
+    GameLogger.startSession({
+        canvasWidth: canvas.width,
+        canvasHeight: canvas.height,
+        inputType: currentInputType,
+        theme: theme,
+        gameDuration: 30
+    });
     
     // Update UI
     shooterElement.textContent = theme.shooter;
@@ -421,6 +1176,18 @@ function startGame(theme) {
     // Spawn initial targets based on configuration
     spawnTargets(targetConfig.count);
     
+    // Log initial state after targets are spawned
+    const shooterRect = shooterElement.getBoundingClientRect();
+    GameLogger.logInitialState(
+        {
+            emoji: theme.shooter,
+            x: shooterRect.left + shooterRect.width / 2,
+            y: shooterRect.top
+        },
+        gameState.targets,
+        gameState.blockers
+    );
+    
     // Start game loop
     requestAnimationFrame(gameLoop);
 }
@@ -435,11 +1202,24 @@ function endGame() {
 
 function gameOver() {
     endGame();
+    
+    // End logging session and log summary
+    GameLogger.endSession(gameState.score);
+    GameLogger.logSummary();
+    
     finalScoreDisplay.textContent = gameState.score;
     gameOverScreen.classList.remove('hidden');
+    
+    // Update replay button visibility
+    updateReplayButton();
 }
 
 function showMenu() {
+    // Stop any ongoing replay
+    if (ReplaySystem.isReplaying) {
+        ReplaySystem.stopReplay();
+    }
+    
     menuScreen.classList.remove('hidden');
     gameScreen.classList.add('hidden');
     gameOverScreen.classList.add('hidden');
@@ -522,6 +1302,11 @@ function spawnTarget(index = 0) {
     
     gameState.targets.push(target);
     
+    // Log target spawn (only during active gameplay, not initial spawn)
+    if (GameLogger.currentSession && GameLogger.currentSession.initialState.targets.length > 0) {
+        GameLogger.logTargetSpawn(target, gameState.targets.length - 1);
+    }
+    
     // Spawn blocker if this behavior has one and target doesn't have one yet
     if (behavior.hasBlocker) {
         const existingBlocker = gameState.blockers.find(b => b.parentTarget === target);
@@ -550,6 +1335,9 @@ function spawnBlocker(target, blockerConfig) {
 function gameLoop() {
     if (!gameState.isPlaying) return;
     
+    // Increment frame counter
+    frameCounter++;
+    
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
@@ -567,6 +1355,17 @@ function gameLoop() {
     
     // Check collisions
     checkCollisions();
+    
+    // Log game frame periodically for replay
+    if (frameCounter % FRAME_LOG_INTERVAL === 0) {
+        GameLogger.logGameFrame({
+            targets: gameState.targets,
+            projectiles: gameState.projectiles,
+            blockers: gameState.blockers,
+            score: gameState.score,
+            timeLeft: gameState.timeLeft
+        });
+    }
     
     // Ensure minimum targets based on configuration
     const targetConfig = gameState.currentTheme.targetConfig || { minCount: 3, behavior: 'moving' };
@@ -677,6 +1476,14 @@ function updateProjectiles() {
         // Remove if out of bounds
         if (projectile.x < -50 || projectile.x > canvas.width + 50 ||
             projectile.y < -50 || projectile.y > canvas.height + 50) {
+            // Log projectile miss before deactivating
+            let reason = 'out_of_bounds';
+            if (projectile.x < -50) reason = 'left_boundary';
+            else if (projectile.x > canvas.width + 50) reason = 'right_boundary';
+            else if (projectile.y < -50) reason = 'top_boundary';
+            else if (projectile.y > canvas.height + 50) reason = 'bottom_boundary';
+            
+            GameLogger.logProjectileMiss(projectile, reason);
             projectile.active = false;
         }
     });
@@ -711,6 +1518,7 @@ function checkCollisions() {
             
             if (distance < hitRadius) {
                 // Blocked!
+                GameLogger.logProjectileBlocked(projectile, blocker);
                 projectile.active = false;
                 showBlockEffect(blocker.x, blocker.y);
                 return; // Don't check targets if blocked
@@ -731,6 +1539,9 @@ function checkCollisions() {
                 const points = calculateScore(target, distance);
                 
                 if (points > 0) {
+                    // Log hit before updating score
+                    GameLogger.logProjectileHit(projectile, target, points, distance);
+                    
                     // For non-respawning targets (dartboard, goal), don't deactivate
                     // just award points. For respawning targets, deactivate them.
                     if (target.respawns === false) {
@@ -833,6 +1644,32 @@ function showBlockEffect(x, y) {
     gameScreen.appendChild(effect);
     
     setTimeout(() => effect.remove(), 500);
+}
+
+// Update replay button visibility based on available replay data
+function updateReplayButton() {
+    const replayBtn = document.getElementById('replay-btn');
+    if (replayBtn) {
+        if (GameLogger.hasReplayData()) {
+            replayBtn.style.display = 'inline-block';
+        } else {
+            replayBtn.style.display = 'none';
+        }
+    }
+}
+
+// Handle replay button click
+function handleReplayClick() {
+    if (ReplaySystem.isReplaying) {
+        return;
+    }
+    
+    gameOverScreen.classList.add('hidden');
+    
+    if (!ReplaySystem.startReplay()) {
+        console.log('[ReplaySystem] Failed to start replay - no data available');
+        alert('No replay data available. Play a game first!');
+    }
 }
 
 // Initialize when DOM is loaded
