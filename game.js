@@ -1469,6 +1469,8 @@ function updateProjectiles() {
     gameState.projectiles.forEach(projectile => {
         if (!projectile.active) return;
         
+        // Move projectile in direction of drag (not opposite like slingshot)
+        // Both use subtraction because velocity is calculated from (start - current)
         projectile.x -= projectile.vx;
         projectile.y -= projectile.vy;
         projectile.vy -= gravity;
