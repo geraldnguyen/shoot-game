@@ -490,7 +490,7 @@ const ReplaySystem = {
                 vy: t.vy,
                 active: true,
                 behavior: t.behavior,
-                behaviorConfig: targetBehaviors[t.behavior] || targetBehaviors.moving,
+                behaviorConfig: getBehavior(t.behavior),
                 scoring: t.scoring,
                 respawns: t.scoring ? t.scoring.type !== 'zones' : true
             });
@@ -638,7 +638,7 @@ const ReplaySystem = {
                     vy: event.data.vy,
                     active: true,
                     behavior: event.data.behavior,
-                    behaviorConfig: targetBehaviors[event.data.behavior] || targetBehaviors.moving,
+                    behaviorConfig: getBehavior(event.data.behavior),
                     respawns: true
                 });
                 break;
@@ -692,146 +692,19 @@ let currentInputType = 'mouse';
 let frameCounter = 0;
 const FRAME_LOG_INTERVAL = 30; // Log every 30 frames (about every 0.5s at 60fps)
 
-// Target behavior configurations (abstracted from theme visuals)
-const targetBehaviors = {
-    // Moving targets with uniform scoring (like ducks)
-    moving: {
-        moves: true,
-        speedRange: { min: 1, max: 3 },
-        respawns: true,
-        scoring: { type: 'uniform', basePoints: 10 }
-    },
-    // Stationary single target with zone scoring (like dartboard)
-    dartboard: {
-        moves: false,
-        speedRange: { min: 0, max: 0 },
-        respawns: false,
-        scoring: {
-            type: 'zones',
-            zones: [
-                { radiusPercent: 0.15, points: 50, name: 'bullseye' },
-                { radiusPercent: 0.35, points: 30, name: 'inner' },
-                { radiusPercent: 0.65, points: 20, name: 'middle' },
-                { radiusPercent: 1.0, points: 10, name: 'outer' }
-            ]
-        }
-    },
-    // Stationary target with blocker (like football goal with goalkeeper)
-    guarded: {
-        moves: false,
-        speedRange: { min: 0, max: 0 },
-        respawns: false,
-        hasBlocker: true,
-        blockerConfig: {
-            emoji: '🧤',
-            size: 50,
-            speed: 3,
-            movementRange: 0.4 // 40% of target width
-        },
-        scoring: { type: 'uniform', basePoints: 20 }
-    },
-    // Floating targets (like balloons)
-    floating: {
-        moves: true,
-        speedRange: { min: 0.5, max: 1.5 },
-        floatUp: true, // Balloons float upward
-        respawns: true,
-        scoring: { type: 'uniform', basePoints: 10 }
-    },
-    // Standard stationary target
-    stationary: {
-        moves: false,
-        speedRange: { min: 0, max: 0 },
-        respawns: true,
-        scoring: { type: 'uniform', basePoints: 10 }
-    }
-};
+// Target behavior configurations - loaded from ThemeLoader or defaults
+let targetBehaviors = {};
 
-// Theme definitions with configurable target properties
-const themes = {
-    'shooting-range': {
-        name: 'Shooting Range',
-        shooter: '🔫',
-        target: '🎯',
-        projectile: '⚫',
-        background: 'range',
-        hitSound: 'hit',
-        missSound: 'miss',
-        // Target configuration
-        targetConfig: {
-            behavior: 'stationary',
-            count: 3,
-            minCount: 3,
-            sizeRange: { min: 40, max: 60 }
-        }
-    },
-    'duck-hunting': {
-        name: 'Duck Hunting',
-        shooter: '🏹',
-        target: '🦆',
-        projectile: '➡️',
-        background: 'pond',
-        hitSound: 'quack',
-        missSound: 'splash',
-        // Target configuration
-        targetConfig: {
-            behavior: 'moving',
-            count: 5,
-            minCount: 3,
-            sizeRange: { min: 35, max: 50 }
-        }
-    },
-    'balloon-shooting': {
-        name: 'Balloon Shooting',
-        shooter: '👆',
-        target: '🎈',
-        projectile: '📍',
-        background: 'sky',
-        hitSound: 'pop',
-        missSound: 'whoosh',
-        // Target configuration
-        targetConfig: {
-            behavior: 'floating',
-            count: 6,
-            minCount: 4,
-            sizeRange: { min: 30, max: 45 }
-        }
-    },
-    'dart-throwing': {
-        name: 'Dart Throwing',
-        shooter: '✋',
-        target: '🎯',
-        projectile: '🎯',
-        background: 'pub',
-        hitSound: 'thud',
-        missSound: 'clatter',
-        // Target configuration - single large dartboard
-        targetConfig: {
-            behavior: 'dartboard',
-            count: 1,
-            minCount: 1,
-            sizeRange: { min: 120, max: 120 },
-            fixedPosition: { x: 0.5, y: 0.35 } // Center-top of play area
-        }
-    },
-    'football-shootout': {
-        name: 'Football Shootout',
-        shooter: '🦶',
-        target: '🥅',
-        projectile: '⚽',
-        background: 'stadium',
-        hitSound: 'goal',
-        missSound: 'crowd',
-        // Target configuration - single goal with goalkeeper
-        targetConfig: {
-            behavior: 'guarded',
-            count: 1,
-            minCount: 1,
-            sizeRange: { min: 180, max: 180 },
-            fixedPosition: { x: 0.5, y: 0.25 } // Center-top of play area
-        }
+// Theme definitions - loaded from ThemeLoader or defaults
+let themes = {};
+
+// Get behavior from loader or fallback
+function getBehavior(behaviorName) {
+    if (typeof ThemeLoader !== 'undefined' && ThemeLoader.cache.behaviors) {
+        return ThemeLoader.getBehavior(behaviorName);
     }
-};
+    return targetBehaviors[behaviorName] || targetBehaviors.moving;
+}
 
 // Game state
 let gameState = {
@@ -862,7 +735,7 @@ let scoreDisplay, timeDisplay, finalScoreDisplay;
 let shooterElement, aimLine;
 
 // Initialize the game
-function init() {
+async function init() {
     // Get DOM elements
     menuScreen = document.getElementById('menu-screen');
     gameScreen = document.getElementById('game-screen');
@@ -879,8 +752,151 @@ function init() {
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
+    // Initialize ThemeLoader and load external themes
+    if (typeof ThemeLoader !== 'undefined') {
+        await ThemeLoader.init();
+        targetBehaviors = ThemeLoader.getAllBehaviors();
+        themes = ThemeLoader.cache.builtInThemes || {};
+        
+        // Populate dynamic theme buttons for custom themes
+        populateCustomThemes();
+    } else {
+        // Fallback to defaults if ThemeLoader is not available
+        targetBehaviors = getDefaultBehaviors();
+        themes = getDefaultThemes();
+    }
+
     // Setup event listeners
     setupEventListeners();
+}
+
+// Populate custom theme buttons in the menu
+function populateCustomThemes() {
+    if (typeof ThemeLoader === 'undefined') return;
+    
+    const customThemes = ThemeLoader.cache.customThemes || [];
+    if (customThemes.length === 0) return;
+    
+    const themeSelector = document.getElementById('theme-selector');
+    if (!themeSelector) return;
+    
+    // Add a separator
+    const separator = document.createElement('div');
+    separator.className = 'theme-separator';
+    separator.textContent = '— Custom Themes —';
+    separator.style.cssText = 'color: rgba(255,255,255,0.7); margin: 10px 0; font-size: 0.9rem;';
+    themeSelector.appendChild(separator);
+    
+    // Add buttons for each custom theme
+    customThemes.forEach(theme => {
+        const btn = document.createElement('button');
+        btn.className = 'theme-btn';
+        btn.dataset.theme = theme.id;
+        btn.dataset.custom = 'true';
+        btn.textContent = `${theme.target || '🎮'} ${theme.name}`;
+        btn.addEventListener('click', () => {
+            startGame(theme);
+        });
+        themeSelector.appendChild(btn);
+    });
+}
+
+// Default behaviors fallback
+function getDefaultBehaviors() {
+    return {
+        moving: {
+            moves: true,
+            speedRange: { min: 1, max: 3 },
+            respawns: true,
+            scoring: { type: 'uniform', basePoints: 10 }
+        },
+        dartboard: {
+            moves: false,
+            speedRange: { min: 0, max: 0 },
+            respawns: false,
+            scoring: {
+                type: 'zones',
+                zones: [
+                    { radiusPercent: 0.15, points: 50, name: 'bullseye' },
+                    { radiusPercent: 0.35, points: 30, name: 'inner' },
+                    { radiusPercent: 0.65, points: 20, name: 'middle' },
+                    { radiusPercent: 1.0, points: 10, name: 'outer' }
+                ]
+            }
+        },
+        guarded: {
+            moves: false,
+            speedRange: { min: 0, max: 0 },
+            respawns: false,
+            hasBlocker: true,
+            blockerConfig: {
+                emoji: '🧤',
+                size: 50,
+                speed: 3,
+                movementRange: 0.4
+            },
+            scoring: { type: 'uniform', basePoints: 20 }
+        },
+        floating: {
+            moves: true,
+            speedRange: { min: 0.5, max: 1.5 },
+            floatUp: true,
+            respawns: true,
+            scoring: { type: 'uniform', basePoints: 10 }
+        },
+        stationary: {
+            moves: false,
+            speedRange: { min: 0, max: 0 },
+            respawns: true,
+            scoring: { type: 'uniform', basePoints: 10 }
+        }
+    };
+}
+
+// Default themes fallback
+function getDefaultThemes() {
+    return {
+        'shooting-range': {
+            name: 'Shooting Range',
+            shooter: '🔫',
+            target: '🎯',
+            projectile: '⚫',
+            background: 'range',
+            targetConfig: { behavior: 'stationary', count: 3, minCount: 3, sizeRange: { min: 40, max: 60 } }
+        },
+        'duck-hunting': {
+            name: 'Duck Hunting',
+            shooter: '🏹',
+            target: '🦆',
+            projectile: '➡️',
+            background: 'pond',
+            targetConfig: { behavior: 'moving', count: 5, minCount: 3, sizeRange: { min: 35, max: 50 } }
+        },
+        'balloon-shooting': {
+            name: 'Balloon Shooting',
+            shooter: '👆',
+            target: '🎈',
+            projectile: '📍',
+            background: 'sky',
+            targetConfig: { behavior: 'floating', count: 6, minCount: 4, sizeRange: { min: 30, max: 45 } }
+        },
+        'dart-throwing': {
+            name: 'Dart Throwing',
+            shooter: '✋',
+            target: '🎯',
+            projectile: '🎯',
+            background: 'pub',
+            targetConfig: { behavior: 'dartboard', count: 1, minCount: 1, sizeRange: { min: 120, max: 120 }, fixedPosition: { x: 0.5, y: 0.35 } }
+        },
+        'football-shootout': {
+            name: 'Football Shootout',
+            shooter: '🦶',
+            target: '🥅',
+            projectile: '⚽',
+            background: 'stadium',
+            targetConfig: { behavior: 'guarded', count: 1, minCount: 1, sizeRange: { min: 180, max: 180 }, fixedPosition: { x: 0.5, y: 0.25 } }
+        }
+    };
 }
 
 function resizeCanvas() {
@@ -889,11 +905,21 @@ function resizeCanvas() {
 }
 
 function setupEventListeners() {
-    // Theme selection buttons
-    document.querySelectorAll('.theme-btn[data-theme]').forEach(btn => {
+    // Theme selection buttons (for built-in themes)
+    document.querySelectorAll('.theme-btn[data-theme]:not([data-custom])').forEach(btn => {
         btn.addEventListener('click', () => {
             const themeName = btn.dataset.theme;
-            startGame(themes[themeName]);
+            // Try ThemeLoader first, fallback to themes object
+            let theme;
+            if (typeof ThemeLoader !== 'undefined') {
+                theme = ThemeLoader.getTheme(themeName);
+            }
+            if (!theme) {
+                theme = themes[themeName];
+            }
+            if (theme) {
+                startGame(theme);
+            }
         });
     });
 
@@ -1254,7 +1280,7 @@ function spawnTarget(index = 0) {
         sizeRange: { min: 40, max: 60 }
     };
     
-    const behavior = targetBehaviors[targetConfig.behavior] || targetBehaviors.moving;
+    const behavior = getBehavior(targetConfig.behavior);
     const sizeRange = targetConfig.sizeRange;
     
     // Calculate position
@@ -1369,7 +1395,7 @@ function gameLoop() {
     
     // Ensure minimum targets based on configuration
     const targetConfig = gameState.currentTheme.targetConfig || { minCount: 3, behavior: 'moving' };
-    const behavior = targetBehaviors[targetConfig.behavior] || targetBehaviors.moving;
+    const behavior = getBehavior(targetConfig.behavior);
     
     if (behavior.respawns) {
         const activeTargets = gameState.targets.filter(t => t.active).length;
@@ -1390,7 +1416,7 @@ function updateTargets() {
     gameState.targets.forEach(target => {
         if (!target.active) return;
         
-        const behavior = target.behaviorConfig || targetBehaviors.moving;
+        const behavior = target.behaviorConfig || getBehavior('moving');
         
         // Only update position if target moves
         if (behavior.moves) {

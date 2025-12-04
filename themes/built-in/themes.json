@@ -1,0 +1,79 @@
+{
+    "shooting-range": {
+        "name": "Shooting Range",
+        "shooter": "🔫",
+        "target": "🎯",
+        "projectile": "⚫",
+        "background": "range",
+        "hitSound": "hit",
+        "missSound": "miss",
+        "targetConfig": {
+            "behavior": "stationary",
+            "count": 3,
+            "minCount": 3,
+            "sizeRange": { "min": 40, "max": 60 }
+        }
+    },
+    "duck-hunting": {
+        "name": "Duck Hunting",
+        "shooter": "🏹",
+        "target": "🦆",
+        "projectile": "➡️",
+        "background": "pond",
+        "hitSound": "quack",
+        "missSound": "splash",
+        "targetConfig": {
+            "behavior": "moving",
+            "count": 5,
+            "minCount": 3,
+            "sizeRange": { "min": 35, "max": 50 }
+        }
+    },
+    "balloon-shooting": {
+        "name": "Balloon Shooting",
+        "shooter": "👆",
+        "target": "🎈",
+        "projectile": "📍",
+        "background": "sky",
+        "hitSound": "pop",
+        "missSound": "whoosh",
+        "targetConfig": {
+            "behavior": "floating",
+            "count": 6,
+            "minCount": 4,
+            "sizeRange": { "min": 30, "max": 45 }
+        }
+    },
+    "dart-throwing": {
+        "name": "Dart Throwing",
+        "shooter": "✋",
+        "target": "🎯",
+        "projectile": "🎯",
+        "background": "pub",
+        "hitSound": "thud",
+        "missSound": "clatter",
+        "targetConfig": {
+            "behavior": "dartboard",
+            "count": 1,
+            "minCount": 1,
+            "sizeRange": { "min": 120, "max": 120 },
+            "fixedPosition": { "x": 0.5, "y": 0.35 }
+        }
+    },
+    "football-shootout": {
+        "name": "Football Shootout",
+        "shooter": "🦶",
+        "target": "🥅",
+        "projectile": "⚽",
+        "background": "stadium",
+        "hitSound": "goal",
+        "missSound": "crowd",
+        "targetConfig": {
+            "behavior": "guarded",
+            "count": 1,
+            "minCount": 1,
+            "sizeRange": { "min": 180, "max": 180 },
+            "fixedPosition": { "x": 0.5, "y": 0.25 }
+        }
+    }
+}
