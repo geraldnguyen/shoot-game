@@ -1469,7 +1469,7 @@ function updateProjectiles() {
     gameState.projectiles.forEach(projectile => {
         if (!projectile.active) return;
         
-        projectile.x += projectile.vx;
+        projectile.x -= projectile.vx;
         projectile.y -= projectile.vy;
         projectile.vy -= gravity;
         
