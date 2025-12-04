@@ -135,7 +135,7 @@ const themes = {
             behavior: 'guarded',
             count: 1,
             minCount: 1,
-            sizeRange: { min: 100, max: 100 },
+            sizeRange: { min: 150, max: 150 },
             fixedPosition: { x: 0.5, y: 0.25 } // Center-top of play area
         }
     }
@@ -298,6 +298,7 @@ function handleDragMove(e) {
     dragState.currentY = e.clientY;
     
     updateAimLine();
+    updateShooterRotation();
 }
 
 function handleDragEnd() {
@@ -305,6 +306,9 @@ function handleDragEnd() {
     
     dragState.isDragging = false;
     aimLine.classList.add('hidden');
+    
+    // Reset shooter rotation
+    shooterElement.style.transform = '';
     
     // Calculate direction and force
     const dx = dragState.startX - dragState.currentX;
@@ -329,14 +333,33 @@ function updateAimLine() {
     const distance = Math.sqrt(dx * dx + dy * dy);
     const angle = Math.atan2(dx, dy);
     
+    // Get shooter and shooter-area positions
     const shooterRect = shooterElement.getBoundingClientRect();
-    const shooterCenterX = shooterRect.left + shooterRect.width / 2;
-    const shooterCenterY = shooterRect.top;
+    const shooterAreaRect = shooterElement.parentElement.getBoundingClientRect();
+    
+    // Position aim line relative to shooter-area (its parent)
+    const shooterCenterX = shooterRect.left + shooterRect.width / 2 - shooterAreaRect.left;
+    const shooterCenterY = shooterRect.top - shooterAreaRect.top;
     
     aimLine.style.height = `${Math.min(distance, 200)}px`;
     aimLine.style.left = `${shooterCenterX}px`;
-    aimLine.style.bottom = `${window.innerHeight - shooterCenterY}px`;
+    aimLine.style.top = `${shooterCenterY}px`;
     aimLine.style.transform = `translateX(-50%) rotate(${-angle}rad)`;
+}
+
+function updateShooterRotation() {
+    const shooterRect = shooterElement.getBoundingClientRect();
+    const shooterCenterX = shooterRect.left + shooterRect.width / 2;
+    const shooterCenterY = shooterRect.top + shooterRect.height / 2;
+    
+    // Calculate angle from shooter to current touch/mouse position
+    const dx = dragState.currentX - shooterCenterX;
+    const dy = dragState.currentY - shooterCenterY;
+    const angle = Math.atan2(dy, dx);
+    
+    // Convert to degrees and rotate (default orientation is pointing up, so adjust by 90 degrees)
+    const degrees = (angle * 180 / Math.PI) + 90;
+    shooterElement.style.transform = `rotate(${degrees}deg)`;
 }
 
 function shootProjectile(angle, force) {
