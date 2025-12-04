@@ -2,9 +2,13 @@
 
 A simple shooting game playable on the web with customizable skins and multiple themes.
 
+## 🎮 Play Now
+
+**[Play the game on GitHub Pages](https://geraldnguyen.github.io/shoot-game/)**
+
 ## How to Play
 
-1. Open `index.html` in a web browser
+1. Visit the game URL above, or open `index.html` in a web browser
 2. Select a theme or customize your own skins
 3. Use touch/mouse to aim and shoot:
    - Press and hold on the game canvas
@@ -50,6 +54,28 @@ python -m http.server 8000
 
 # Using Node.js http-server
 npx http-server
+```
+
+## GitHub Pages Setup
+
+This game is configured to automatically deploy to GitHub Pages. To enable it:
+
+### Step 1: Enable GitHub Pages in Repository Settings
+1. Go to your repository on GitHub
+2. Click **Settings** → **Pages** (in the left sidebar under "Code and automation")
+3. Under **Build and deployment**:
+   - **Source**: Select "GitHub Actions"
+4. Click **Save**
+
+### Step 2: Trigger the Deployment
+The deployment will automatically run when:
+- You push to the `main` branch
+- You manually trigger the workflow from the Actions tab
+
+### Step 3: Access Your Game
+Once deployed, your game will be available at:
+```
+https://geraldnguyen.github.io/shoot-game/
 ```
 
 ## License
